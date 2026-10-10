@@ -24,7 +24,7 @@ struct TodoListView: View {
                     .listRowSeparator(.hidden)
                 }
 
-                Section(header: Text(state.summary)) {
+                Section {
                     if state.items.isEmpty && !state.isLoading {
                         Text(state.emptyMessage)
                             .foregroundStyle(.secondary)
@@ -49,9 +49,17 @@ struct TodoListView: View {
                                 .tint(.green)
                             }
                     }
+                } header: {
+                    HStack(spacing: 4) {
+                        Text(state.summary)
+                        Text("·")
+                        Text(state.syncLabel).foregroundStyle(state.syncFailed ? Color.red : Color.secondary)
+                    }
                 }
             }
             .listStyle(.insetGrouped)
+            // Awaits the shared suspend function, so the spinner stays until sync finishes.
+            .refreshable { try? await vm.refresh() }
             .animation(.default, value: state.items)
             .navigationTitle("My To-Do")
             .toolbar {
@@ -144,6 +152,12 @@ private struct TodoRow: View {
                 }
             }
             Spacer()
+            if todo.isPendingSync {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel("Waiting to sync")
+            }
             if !todo.isDone && todo.priority != .normal {
                 Circle()
                     .fill(todo.priority == .high ? Color.red : Color.gray)

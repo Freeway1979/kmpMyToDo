@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm-android:
+    name: JVM tests & Android build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Shared tests (JVM), server tests, Android debug build
+        run: ./gradlew :shared:testAndroidHostTest :server:test :androidApp:assembleDebug --stacktrace
+
+  ios:
+    name: iOS tests & app build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Shared tests on the iOS simulator
+        run: ./gradlew :shared:iosSimulatorArm64Test --stacktrace
+      - name: Build the iOS app
+        run: >
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath iosApp/build/DerivedData
+          CODE_SIGNING_ALLOWED=NO build

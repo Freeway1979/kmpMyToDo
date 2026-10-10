@@ -61,4 +61,22 @@ object TodoRules {
         filter == TodoFilter.Completed -> "No completed to-dos yet"
         else -> "No to-dos"
     }
+
+    /** One short line describing sync state, shown next to the summary on both platforms. */
+    fun syncLabel(status: SyncStatus, pendingChanges: Int): String {
+        val pending = when (pendingChanges) {
+            0 -> null
+            1 -> "1 change not synced"
+            else -> "$pendingChanges changes not synced"
+        }
+        return when (status) {
+            SyncStatus.Syncing -> "Syncing…"
+            is SyncStatus.Failed -> when (status.reason) {
+                SyncError.Offline -> listOfNotNull("Offline", pending).joinToString(" · ")
+                SyncError.Server, SyncError.BadResponse -> "Sync failed, will retry"
+            }
+            is SyncStatus.Synced -> pending ?: "Synced"
+            SyncStatus.Idle -> pending ?: "Not synced yet"
+        }
+    }
 }

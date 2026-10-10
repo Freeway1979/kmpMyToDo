@@ -2,6 +2,8 @@ package com.andy.mytodo.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.andy.mytodo.domain.SyncController
+import com.andy.mytodo.domain.SyncStatus
 import com.andy.mytodo.domain.TodoRepository
 import com.andy.mytodo.domain.TodoRules
 import com.andy.mytodo.model.Priority
@@ -30,6 +32,10 @@ data class TodoListUiState(
     val emptyMessage: String = "",
     /** Set right after a delete so the UI can offer "Undo". */
     val recentlyDeleted: Todo? = null,
+    // Sync is flattened into plain fields: easier for SwiftUI than a sealed class.
+    val syncLabel: String = "",
+    val isSyncing: Boolean = false,
+    val syncFailed: Boolean = false,
 ) {
     val canClearCompleted: Boolean get() = completedCount > 0
     val filters: List<TodoFilter> get() = TodoFilter.entries
@@ -47,12 +53,13 @@ private data class LocalInputs(
 
 class TodoListViewModel(
     private val repository: TodoRepository,
+    private val sync: SyncController,
 ) : ViewModel() {
 
     private val inputs = MutableStateFlow(LocalInputs())
 
     val uiState: StateFlow<TodoListUiState> =
-        combine(repository.observeTodos(), inputs) { todos, input ->
+        combine(repository.observeTodos(), inputs, sync.status, sync.pendingCount) { todos, input, syncStatus, pending ->
             val active = todos.count { !it.isDone }
             TodoListUiState(
                 isLoading = false,
@@ -68,6 +75,9 @@ class TodoListViewModel(
                 summary = TodoRules.summary(active, todos.size),
                 emptyMessage = TodoRules.emptyMessage(input.filter, input.query, todos.size),
                 recentlyDeleted = input.recentlyDeleted,
+                syncLabel = TodoRules.syncLabel(syncStatus, pending),
+                isSyncing = syncStatus == SyncStatus.Syncing,
+                syncFailed = syncStatus is SyncStatus.Failed,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodoListUiState())
 
@@ -100,7 +110,7 @@ class TodoListViewModel(
      * Validates and saves an edit. Returns an error message to show in the
      * editor, or null when the change was accepted.
      */
-    fun updateTodo(id: Long, title: String, notes: String, priority: Priority): String? {
+    fun updateTodo(id: String, title: String, notes: String, priority: Priority): String? {
         val error = TodoRules.validateTitle(title) ?: TodoRules.validateNotes(notes)
         if (error == null) viewModelScope.launch { repository.update(id, title, notes, priority) }
         return error
@@ -124,6 +134,14 @@ class TodoListViewModel(
     }
 
     fun dismissUndo() = inputs.update { it.copy(recentlyDeleted = null) }
+
+    /**
+     * Pull-to-refresh. A suspend function so the UI can keep its spinner up
+     * until sync finishes; Swift sees it as `async`.
+     */
+    suspend fun refresh() {
+        sync.sync()
+    }
 
     fun clearCompleted() {
         viewModelScope.launch { repository.clearCompleted() }

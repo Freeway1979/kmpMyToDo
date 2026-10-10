@@ -2,7 +2,6 @@ package com.andy.mytodo.android
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -47,11 +47,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +72,7 @@ import com.andy.mytodo.model.Priority
 import com.andy.mytodo.model.Todo
 import com.andy.mytodo.presentation.TodoListUiState
 import com.andy.mytodo.presentation.TodoListViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +81,9 @@ fun TodoListScreen(viewModel: TodoListViewModel) {
     val snackbar = remember { SnackbarHostState() }
     var editing by remember { mutableStateOf<Todo?>(null) }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scope = rememberCoroutineScope()
+    // Only user-initiated refreshes show the spinner; background syncs don't.
+    var refreshing by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.recentlyDeleted) {
         val deleted = state.recentlyDeleted ?: return@LaunchedEffect
@@ -96,7 +102,11 @@ fun TodoListScreen(viewModel: TodoListViewModel) {
                 title = {
                     Column {
                         Text("My To-Do", fontWeight = FontWeight.SemiBold)
-                        Text(state.summary, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "${state.summary} · ${state.syncLabel}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (state.syncFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 },
                 actions = {
@@ -121,17 +131,29 @@ fun TodoListScreen(viewModel: TodoListViewModel) {
             SearchField(viewModel::onQueryChange)
             FilterRow(state, viewModel)
             HorizontalDivider()
-            if (state.items.isEmpty() && !state.isLoading) {
-                Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        state.emptyMessage,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            } else {
-                LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = {
+                    scope.launch {
+                        refreshing = true
+                        viewModel.refresh()
+                        refreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    if (state.items.isEmpty() && !state.isLoading) {
+                        item {
+                            Text(
+                                state.emptyMessage,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp, horizontal = 32.dp),
+                            )
+                        }
+                    }
                     items(state.items, key = { it.id }) { todo ->
                         TodoRow(
                             todo = todo,
@@ -256,6 +278,14 @@ private fun TodoRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        if (todo.isPendingSync) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "Waiting to sync",
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(end = 8.dp).size(16.dp),
+            )
         }
         if (!todo.isDone && todo.priority != Priority.Normal) PriorityDot(todo.priority)
         IconButton(onClick = onDelete) {
