@@ -4,15 +4,18 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.room.Room
-import com.andy.mytodo.data.TodoDatabase
-import com.andy.mytodo.data.buildTodoDatabase
+import com.andy.mytodo.data.local.TodoDatabase
+import com.andy.mytodo.data.local.buildTodoDatabase
+import com.andy.mytodo.di.AppConfig
 import com.andy.mytodo.di.AppContainer
 import com.andy.mytodo.presentation.TodoListUiState
 import com.andy.mytodo.presentation.TodoListViewModel
+import io.ktor.client.engine.darwin.Darwin
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import platform.Foundation.NSBundle
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
@@ -21,7 +24,13 @@ import platform.Foundation.NSUserDomainMask
 object SharedApp {
     private val container: AppContainer by lazy {
         val builder = Room.databaseBuilder<TodoDatabase>(name = documentDirectory() + "/" + TodoDatabase.FILE_NAME)
-        AppContainer(buildTodoDatabase(builder))
+        AppContainer(buildTodoDatabase(builder), Darwin.create(), readConfig())
+    }
+
+    /** Reads `API_BASE_URL` from Info.plist, which Xcode fills from the build setting of the same name. */
+    private fun readConfig(): AppConfig {
+        val baseUrl = NSBundle.mainBundle.objectForInfoDictionaryKey("API_BASE_URL") as? String
+        return AppConfig(apiBaseUrl = baseUrl ?: "http://localhost:8080/")
     }
 
     fun makeTodoListOwner(): TodoListViewModelOwner = TodoListViewModelOwner(container)

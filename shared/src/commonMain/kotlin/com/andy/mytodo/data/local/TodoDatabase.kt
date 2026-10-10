@@ -1,4 +1,4 @@
-package com.andy.mytodo.data
+package com.andy.mytodo.data.local
 
 import androidx.room.ConstructedBy
 import androidx.room.Database
@@ -8,7 +8,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 
-@Database(entities = [TodoEntity::class], version = 1)
+@Database(entities = [TodoEntity::class], version = 2)
 @ConstructedBy(TodoDatabaseConstructor::class)
 abstract class TodoDatabase : RoomDatabase() {
     abstract fun todoDao(): TodoDao
@@ -27,6 +27,7 @@ expect object TodoDatabaseConstructor : RoomDatabaseConstructor<TodoDatabase> {
 /** Finishes a platform-specific builder with the settings every platform shares. */
 fun buildTodoDatabase(builder: RoomDatabase.Builder<TodoDatabase>): TodoDatabase =
     builder
+        .addMigrations(*ALL_MIGRATIONS)
         .setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()

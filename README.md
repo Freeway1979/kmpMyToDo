@@ -1,23 +1,43 @@
-# My To-Do — Kotlin Multiplatform
+# My To-Do — a Kotlin Multiplatform best-practice guide
 
-To-do app with a shared Kotlin core and native UIs: Jetpack Compose on Android, SwiftUI on iOS.
+An offline-first To-Do app with sync, built with Kotlin Multiplatform.
+**Everything except the UI is shared**: business rules, the Room database, the
+Ktor networking, the sync engine and the ViewModel. Android uses Jetpack
+Compose, and iOS uses SwiftUI.
 
-## Layout
+The app also serves as a guide: **[read the guide →](docs/README.md)**
 
-| Module | What lives there |
-| --- | --- |
-| `shared/` | **Everything except UI**: model, business rules (validation, sorting, filtering, search, summary/empty-state text), Room KMP database, repository, `TodoListViewModel` (androidx KMP ViewModel), DI container, iOS bridge (`SharedApp`, `TodoListViewModelOwner`) |
-| `androidApp/` | Compose UI only (`TodoListScreen.kt`) |
-| `iosApp/` | SwiftUI UI only; `TodoListModel.swift` adapts the Kotlin `StateFlow` to `@Observable` |
+| Module | Contents |
+|---|---|
+| [`shared/`](shared) | model, rules, Room KMP, Ktor client, sync engine, `TodoListViewModel`, DI |
+| [`contract/`](contract) | API DTOs and routes, shared by the apps and the server |
+| [`server/`](server) | placeholder Ktor backend (file-backed, no auth) |
+| [`androidApp/`](androidApp) | Compose UI only |
+| [`iosApp/`](iosApp) | SwiftUI UI only |
 
-## Build & run
+## Quick start
 
 ```bash
-./gradlew :shared:testAndroidHostTest :shared:iosSimulatorArm64Test   # shared tests on JVM + iOS
-./gradlew :androidApp:installDebug                                     # Android
-open iosApp/iosApp.xcodeproj                                           # iOS (Run in Xcode)
+./gradlew :server:run                    # API on http://localhost:8080
+./gradlew :androidApp:installDebug
+adb reverse tcp:8080 tcp:8080            # device/emulator → your Mac's localhost
+open iosApp/iosApp.xcodeproj             # then Run (⌘R)
 ```
 
-The Xcode build phase runs `./gradlew :shared:embedAndSignAppleFrameworkForXcode`, so Kotlin changes are picked up automatically.
+The apps work fully without the server: changes are kept locally and sync
+when it's reachable.
 
-Toolchain: Kotlin 2.4.21, AGP 9.4.1 (`com.android.kotlin.multiplatform.library`), Gradle 9.7.1, Room 2.8.5, Compose BOM 2026.09.00, compileSdk 37, iOS 17+.
+## Tests
+
+```bash
+./gradlew :shared:testAndroidHostTest :shared:iosSimulatorArm64Test :server:test
+```
+
+Shared tests run on both the JVM and the iOS simulator. CI runs these and
+builds both apps on every pull request.
+
+## Stack
+
+Kotlin 2.4 · AGP 9.4 (`com.android.kotlin.multiplatform.library`) · Gradle 9.7 ·
+Room 2.8 · Ktor 3.6 · kotlinx.serialization · lifecycle-viewmodel 2.11 ·
+Compose BOM 2026.09 · SwiftUI (iOS 17+)

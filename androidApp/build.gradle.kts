@@ -16,8 +16,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Local placeholder server. On a device or emulator, run
+            // `adb reverse tcp:8080 tcp:8080` so localhost reaches your Mac.
+            buildConfigField("String", "API_BASE_URL", "\"http://localhost:8080/\"")
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com/\"")
         }
     }
 
@@ -28,6 +34,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
